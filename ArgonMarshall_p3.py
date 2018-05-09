@@ -14,13 +14,37 @@ workingDirectory = ""
 
 
 def main():
+
+    locking_array = ["table"]
+    lock_flag = 0
+    lock_index = 1
+
     try:
+        if not os.path.exists("./locks"):  # create locking mech if not there
+            os.makedirs("./locks")
         while True:
             command = ""
-            while not ";" in command and not "--" in command:
-                command += raw_input("\n enter a command \n").strip('\r')  # Read input command
-            command = command.split(";")[0]  # Remove ; from the command
-            command_string = str(command)  # Normalize the command
+            #print locking_array, lock_flag
+            if lock_flag is 1:
+                if lock_index is not len(locking_array):
+                    command = locking_array[lock_index]
+                    lock_index += 1
+                else:
+                    toRemove = "./locks/" + locking_array[0]
+                    if os.path.isfile(toRemove):
+                        os.remove(toRemove)
+                    locking_array = ["table"]
+                    lock_index = 1
+                    lock_flag = 0
+
+            if lock_flag is not 1:
+                while not ";" in command and not "--" in command:
+                    command += raw_input("\n enter a command \n").strip('\r')  #Read command command from terminal
+                command = command.split(";")[0]  #Remove ; from the command command
+
+
+
+            command_string = str(command)  #Normalize the command command
             command_string = command_string.upper()
 
             if "--" in command:  # Pass the comments to find command
@@ -56,6 +80,9 @@ def main():
             elif "USE" in command_string:
                 use_db(command)
 
+            elif "BEGIN TRANSACTION" in command_string:
+                locking_array, lock_flag = transaction(locking_array, lock_flag)
+
             elif ".EXIT" in command:  # Exit database if specified
                 print "All done."
                 exit()
@@ -82,7 +109,7 @@ def use_enabled():  # Catch the error when a database hasn't been enabled
 
 
 def get_column(data):
-    column_index = data.split(" | ")
+    column_index = data[0].split(" | ")
     for x in range(len(column_index)):
         column_index[x] = column_index[x].split(" ")[0]
 
@@ -392,146 +419,49 @@ def insert_into(input):
 
 def select_in(command, inputUp):
     try:
-
-        table_array = []
-        table_varibles = []
-        file_nms = []
-        table_lookup = {}
-        table_nms = []
-
-        use_enabled()  # Check that a database is selected
-
-        #TableName parsing section
-        if "JOIN" in inputUp:
-            trimmed_input = re.split("FROM ", command, flags =re.IGNORECASE)[1]
-            #left table will always be [0]
-            if "LEFT" in inputUp:
-                left_table_name = re.split("LEFT", trimmed_input, flags=re.IGNORECASE)[0].lower()
-                right_table_name = re.split("JOIN ", trimmed_input, flags=re.IGNORECASE)[1].lower()
-                right_table_name = re.split("ON", right_table_name, flags=re.IGNORECASE)[0].strip()
-
-                left_table_name = re.split(" ", left_table_name, flags=re.IGNORECASE)[0].strip()
-                right_table_name = re.split(" ", right_table_name, flags=re.IGNORECASE)[0].strip()
-
-                table_array.append(left_table_name) #left table
-                table_array.append(right_table_name) #right table
-                join_type = 'left'
-
-            elif "INNER" in inputUp:
-                left_table_name = re.split("INNER", trimmed_input, flags=re.IGNORECASE)[0].lower()
-                right_table_name = re.split("JOIN ", trimmed_input, flags=re.IGNORECASE)[1].lower()
-                right_table_name = re.split("ON", right_table_name, flags=re.IGNORECASE)[0].strip()
-
-                left_table_name = re.split(" ", left_table_name, flags=re.IGNORECASE)[0].strip()
-                right_table_name = re.split(" ", right_table_name, flags=re.IGNORECASE)[0].strip()
-
-                table_array.append(left_table_name) #left table
-                join_type = 'inner'
-                table_array.append(right_table_name) #right table
-
-            elif "RIGHT" in inputUp: #Not currently implemented
-                table_array = re.split("RIGHT", trimmed_input, flags=re.IGNORECASE)[0].lower() #left table
-                table_array = re.split("JOIN", trimmed_input, flags=re.IGNORECASE)[1].lower() #right table
-                join_type = 'right'
-        
-        elif "WHERE" in inputUp:
-            table_nms = re.split("FROM ", command, flags=re.IGNORECASE)[1].lower()
-            table_nms = re.split("WHERE", table_nms, flags=re.IGNORECASE)[0]
-
-
-        else: #if not join or where
-            table_nms = re.split("FROM ", command, flags=re.IGNORECASE)[1].lower()  # Get string to use for the table name
-            if "," in table_nms:
-                for table in re.split(", ", table_nms):
-                    table_array.append(table)
-            else:
-                table_array.append(table_nms)
-
-        if " " in table_nms:
-            table_nms = table_nms.strip("\r") #removes any leftover returns
-            table_nms = table_nms.strip() #removes any whitespace
-
-        if "," in table_nms:
-            for table in re.split(", ", table_nms):
-                table, table_varible = re.split(" ", table, flags=re.IGNORECASE) #grab the left table name
-                table_lookup[table_varible] = table
-                table_array.append(table)
-                table_varibles.append(table_varible)
-        #else:
-        #    table_array.append(table_nms)
-
-        #TableName Parsing section for WHERE statements
-        #https://stackoverflow.com/questions/7945182/opening-multiple-an-unspecified-number-of-files-at-once-and-ensuring-they-are
-        
-        #Loop through every table_nm to make every file path
-        for table_nm in table_array:
-            if table_nm:
-                file_nms.append(os.path.join(workingDirectory, table_nm))
-
+        use_enabled()  #Check that a database is selected
+        tableName = re.split("FROM ", command, flags=re.IGNORECASE)[1].lower()  #Get string to use for the table name
+        if "WHERE" in inputUp:
+            tableName = re.split("WHERE", tableName, flags=re.IGNORECASE)[0]
+            if " " in tableName:
+                tableName = tableName.split(" ")[0]
+        fileName = os.path.join(workingDirectory, tableName)
         output = ""
-
-        #File management section
-    #if os.path.isfile(file_nm):
-        with multi_file_manager(file_nms, "r+") as tables:
-        #with open(file_nm, "r+") as table:  # Use r+ since tables are already created
-            data = []
-            data_array = []
-
-            #Selection section
-            if "JOIN" in inputUp:
-                for table in tables:
+        if os.path.isfile(fileName):
+            with open(fileName, "r+") as table:  #Since there should already be tables created, use r+
+                if "WHERE" in inputUp: #Using the where to find the matches with all attributes
+                    itemToFind = re.split("WHERE ", command, flags=re.IGNORECASE)[1]
                     data = table.readlines()
-                    data_array.append(data)
-                toJoinOn = re.split("on", command, flags=re.IGNORECASE)[1]
-                counter, output = join_where(toJoinOn, table_varibles, data_array, join_type)
-            #Using the WHERE to find the matches with all attributes
-            elif "WHERE" in inputUp:
-                search_item = re.split("WHERE ", command, flags=re.IGNORECASE)[1]
-                counter = 0
-
-                if len(tables) == 1: #typical where behavior
-                    data = tables[0].readlines()
-                    counter, output = where(search_item, "select", data)
-                else: #implicit inner join
-                    for table in tables:
-                        data = table.readlines()
-                        data_array.append(data)
-                        counter += 1
-                    counter, output = join_where(search_item, table_varibles, data_array)
-
-            #Printing Section        
-            if "SELECT *" in inputUp:
-                #Checks if the output is allocated from WHERE
-                if not output == "":  
+                    mainCount, output = where(itemToFind,"select",data)
                     for line in output:
                         print line
-                #If there is no restriction from WHERE print all
-                else: 
-                    for table in tables:
-                        output += table.read()
-                    print output
-
-            #If doesnt want all attributes, trim down output
-            else:
-                arguments = re.split("SELECT", command, flags=re.IGNORECASE)[1]
-                attributes = re.split("FROM", arguments, flags=re.IGNORECASE)[0]
-                attributes = attributes.split(",")
-                if not output == "":  # Checks if the output is allocated
-                    lines = output
-                else:
-                    lines = table.readlines()
-                    data = lines
-                for line in lines:
-                    out = []
-                    for attribute in attributes:
-                        attribute = attribute.strip()
-                        column_index = get_column(data)
-                        if attribute in column_index:
-                            separated_line = separate(line)
-                            out.append(separated_line[column_index.index(attribute)].strip())
-                    print " | ".join(out)
-    #else:
-    #    print "!Failed to query table " + table_nm + " because it does not exist"
+                if "SELECT *" in inputUp:
+                    if not output == "": #Checks if the output is allocated
+                        for line in output:
+                            print line
+                    else:
+                        output = table.read()
+                        print output
+                else: #If doesnt want all attributes, trim down output
+                    arguments = re.split("SELECT", command, flags=re.IGNORECASE)[1]
+                    attributes = re.split("FROM", arguments, flags=re.IGNORECASE)[0]
+                    attributes = attributes.split(",")
+                    if not output == "":  #This checks if the output is allocated
+                        lines = output
+                    else:
+                        lines = table.readlines()
+                        data = lines
+                    for line in lines:
+                        out = []
+                        for attribute in attributes:
+                            attribute = attribute.strip()
+                            colIndex = returnColIndex(data)
+                            if attribute in colIndex:
+                                splitLine = splitLines(line)
+                                out.append(splitLine[colIndex.index(attribute)].strip())
+                        print " | ".join(out)
+        else:
+            print "!Failed to query table " + tableName + " because it does not exist"
     except IndexError:
         print "!Failed to select because no table name is specified"
     except ValueError as err:
@@ -584,6 +514,55 @@ def update_from(input):
         print "!Failed to update table because no table name is specified"
     except ValueError as err:
         print err.args[0]
+
+def transaction(locking_array, lock_flag):
+
+    try:
+        fileName = ""
+        files = []
+        use_enabled()  #Check that a database is selected
+
+        while True:
+            clInput = ""
+
+            while not ";" in clInput and not "--" in clInput:
+                clInput += raw_input("\n enter a command \n").strip('\r')  #Read clInput command from terminal
+
+            if "commit;" in clInput:
+                print locking_array
+                break
+
+            clInput = clInput.split(";")[0]  #Remove ; from the clInput command
+            inputString = str(clInput)  #Normalize the clInput command
+
+            locking_array.append(inputString)
+
+            if "UPDATE" in inputString.upper():
+                table_name = re.split("UPDATE ", locking_array[1], flags=re.IGNORECASE)[1]  #Get string to use for the table name
+                table_name = re.split("SET", table_name, flags=re.IGNORECASE)[0].lower().strip()
+                file_name = table_name + ".lock"
+                files = os.listdir("./locks")
+                locking_array[0] = file_name
+
+                path = "./locks/" + file_name
+                f = open(path, "w")
+                f.close()
+                lock_flag = 1
+
+        if file_name in files:
+            print "Error: Table", table_name, "is locked!"
+            return ["table"], 0
+
+        return locking_array, lock_flag
+
+    except IndexError:
+        print "!Something went wrong in 'transaction'"
+    except ValueError as err:
+        print err.args[0]
+
+def commitHelper(table):
+    lockFiles = os.listdir();
+    print lockFiles;
 
 
 def use_db(input):

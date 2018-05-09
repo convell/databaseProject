@@ -1,12 +1,11 @@
-CS 457 Programming Assignment 2 -- Design Documentation
+CS 457 Programming Assignment 4 -- Design Documentation
 
 Paul Marshall and Phoebe Argon
-3/27/18
+4/8/18
 
 Design
 ======
-The project is designed so that folders are "databases" and inside the database folders, there are files that are "tables."
-Inside each table/file, one can view the contents of the table.
+The atomicity of PA 4 starts at the begin transaction section. This begin transaction flags the following code between "begin transaction" and "commit" as queded code in an array. The lock isnt created till update is called as selecting does not ruin the atomicity of the execution. Based off the table used in update, a lock is created under the following style: ./locks/tablename.lock. This lock is then checked for on commit, allowing for proper blocking of the database file in order to avoid data hazards. Running commit while a lock in places allows for the command to fail ellegantly.
 
 
 Implementation
@@ -29,15 +28,16 @@ External libraries
 The script imports "OS" and "RE" for use in the program.
 OS helps with modifying files within different selected paths.
 RE handles the case insensitivity.
+contextlib handles the overiding of the default file handler to allow for multiple table handling. 
 
 
 How to execute
 ==============
 Preconditions:
-    - Access to a linux terminal
+    - Access to two linux terminals
     - Python 2 installed on the machine
-    - ArgonMarshall_p2.py and PA2_test.sql are in the same folder
+    - ArgonMarshall_p4.py and then type out commands found in PA4_test.sql on two seperate python instances
 
 In a linux terminal:
-Navigate to the folder containing ArgonMarshall_p2.py and PA2_test.sql
-Type "python ArgonMarshall_p2.py < PA2_test.sql" to execute the script
+Navigate to the folder containing ArgonMarshall_p4.py
+Type "python ArgonMarshall_p4.py" to execute the script
